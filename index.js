@@ -216,7 +216,7 @@ class NYC {
     const visitor = async relFile => {
       const inFile = path.resolve(inputDir, relFile)
       const inCode = await fs.readFile(inFile, 'utf-8')
-      const outCode = this._transform(inCode, inFile) || inCode
+      const outCode = this._transform(inCode, relFile) || inCode
 
       if (output) {
         const { mode } = await fs.stat(inFile)
@@ -232,21 +232,21 @@ class NYC {
 
     this._loadAdditionalModules()
 
-    const stats = await fs.lstat(input)
+    const stats = await fs.lstat(path.resolve(this.cwd, input))
     if (stats.isDirectory()) {
-      inputDir = input
+      inputDir = path.resolve(this.cwd, input)
 
-      const filesToInstrument = await this.exclude.glob(input)
+      const filesToInstrument = await this.exclude.glob(inputDir)
 
       const concurrency = output ? os.cpus().length : 1
       if (this.config.completeCopy && output) {
-        const files = await glob(path.resolve(input, '**'), {
+        const files = await glob(path.resolve(inputDir, '**'), {
           dot: true,
           nodir: true,
           ignore: ['**/.git', '**/.git/**', path.join(output, '**')]
         })
         const destDirs = new Set(
-          files.map(src => path.dirname(path.join(output, path.relative(input, src))))
+          files.map(src => path.dirname(path.join(output, path.relative(inputDir, src))))
         )
 
         await pMap(
@@ -256,7 +256,7 @@ class NYC {
         )
         await pMap(
           files,
-          src => fs.copyFile(src, path.join(output, path.relative(input, src))),
+          src => fs.copyFile(src, path.join(output, path.relative(inputDir, src))),
           { concurrency }
         )
       }
@@ -294,7 +294,7 @@ class NYC {
 
     return (code, metadata, hash) => {
       const filename = metadata.filename
-      const sourceMap = this._getSourceMap(code, filename, hash)
+      const sourceMap = this._getSourceMap(code, path.resolve(this.cwd, filename), hash)
 
       try {
         instrumented = instrumenter.instrumentSync(code, filename, sourceMap)
